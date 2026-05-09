@@ -1,51 +1,49 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from datetime import timedelta
 from core.security import get_password_hash, create_access_token, verify_password
 from core.config import settings
+from core.database import get_db
+from models.user import User
+from schemas.user import UserCreate, Token, UserLogin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-class UserCreate(BaseModel):
-    username: str
-    email: str
-    password: str
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-# In-memory storage for skeleton (replace with DB later)
-fake_users_db = {}
-
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(user: UserCreate):
-    if user.username in fake_users_db:
+async def register(user: UserCreate, db: AsyncSession = Depends(get_db)):
+    # Check if username or email exists
+    result = await db.execute(
+        select(User).where((User.username == user.username) | (User.email == user.email))
+    )
+    existing_user = result.scalars().first()
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
+            detail="Username or email already registered"
         )
     
     hashed_password = get_password_hash(user.password)
-    fake_users_db[user.username] = {
-        "username": user.username,
-        "email": user.email,
-        "hashed_password": hashed_password
-    }
+    db_user = User(
+        username=user.username,
+        email=user.email,
+        hashed_password=hashed_password
+    )
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        subject=user.username, expires_delta=access_token_expires
+        subject=db_user.id, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
-async def login(user: UserLogin):
-    db_user = fake_users_db.get(user.username)
+async def login(user: UserLogin, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.username == user.username))
+    db_user = result.scalars().first()
+    
     if not db_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -53,7 +51,7 @@ async def login(user: UserLogin):
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    if not verify_password(user.password, db_user["hashed_password"]):
+    if not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -62,6 +60,6 @@ async def login(user: UserLogin):
         
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        subject=user.username, expires_delta=access_token_expires
+        subject=db_user.id, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
