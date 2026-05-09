@@ -1,6 +1,6 @@
 import numpy as np
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from sklearn.cluster import KMeans
 from sqlalchemy import update, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,7 +84,9 @@ async def run_faction_clustering():
             )
 
         await db.commit()
-        logger.info(f"Faction clustering complete at {datetime.utcnow()}. Assigned {len(users)} users to {n_clusters} factions.")
+        logger.info(
+            f"Faction clustering complete at {datetime.now(timezone.utc)}. Assigned {len(users)} users to {n_clusters} factions."
+        )
 
 
 async def get_faction_info(user_id, db: AsyncSession):

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from core.database import get_db
 from core.security import get_current_user
 from models.user import User
@@ -18,6 +19,18 @@ async def add_media_item(
 ):
     if recommendation_service.model is None:
         recommendation_service.init_model()
+
+    existing_media = await db.execute(
+        select(MediaItem).where(
+            MediaItem.title == item.title,
+            MediaItem.type == item.media_type,
+        )
+    )
+    if existing_media.scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Media item already exists: '{item.title}'"
+        )
         
     # Content Moderation: Duplicate detection
     # Search for similar items first

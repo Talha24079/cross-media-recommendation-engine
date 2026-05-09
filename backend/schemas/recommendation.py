@@ -1,5 +1,5 @@
 import uuid
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from enum import Enum
 
@@ -21,9 +21,8 @@ class MediaItemResponse(BaseModel):
     title: str
     media_type: str
     description: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
+
+    model_config = ConfigDict(from_attributes=True)
 
 class RecommendationResponse(BaseModel):
     id: uuid.UUID

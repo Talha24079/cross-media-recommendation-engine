@@ -12,3 +12,10 @@ pgvector
 numpy
 scikit-learn
 apscheduler
+httpx
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
+pytest-xdist
+schemathesis

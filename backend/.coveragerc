@@ -1,0 +1,16 @@
+[run]
+branch = True
+source = .
+omit =
+    tests/*
+    venv/*
+    */site-packages/*
+    alembic/*
+    test.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    pass
