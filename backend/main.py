@@ -1,7 +1,9 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, recommendation, economy, community
 from contextlib import asynccontextmanager
 from core.database import AsyncSessionLocal
+from core.exceptions import add_exception_handlers
 from services import recommendation_service
 from services.background_jobs import start_background_jobs, stop_background_jobs
 
@@ -22,6 +24,18 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # In production, restrict this to specific domains
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add global exception handlers
+add_exception_handlers(app)
 
 # Include routers
 app.include_router(auth.router)

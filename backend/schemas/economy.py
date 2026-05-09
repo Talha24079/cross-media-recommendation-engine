@@ -1,12 +1,12 @@
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
 class BountyCreate(BaseModel):
-    title: str
+    title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    reward_amount: int
+    reward_amount: int = Field(..., gt=0, le=10000)
 
 class BountyResponse(BaseModel):
     id: uuid.UUID

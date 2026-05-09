@@ -1,10 +1,19 @@
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
+from enum import Enum
+
+class MediaTypeEnum(str, Enum):
+    movie = "movie"
+    book = "book"
+    game = "game"
+    music = "music"
+    podcast = "podcast"
+    anime = "anime"
 
 class MediaItemCreate(BaseModel):
-    title: str
-    media_type: str
+    title: str = Field(..., min_length=1, max_length=300)
+    media_type: MediaTypeEnum
     description: Optional[str] = None
 
 class MediaItemResponse(BaseModel):

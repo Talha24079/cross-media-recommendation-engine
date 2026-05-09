@@ -77,13 +77,15 @@ async def create_bounty(creator_id, title: str, description: str, reward_amount:
     return bounty
 
 
-async def resolve_bounty(bounty_id, winner_id, db: AsyncSession):
-    """Resolve a bounty by awarding points to the winner."""
+async def resolve_bounty(bounty_id, winner_id, creator_id, db: AsyncSession):
+    """Resolve a bounty by awarding points to the winner. Only the creator can resolve it."""
     result = await db.execute(select(Bounty).where(Bounty.id == bounty_id))
     bounty = result.scalar_one_or_none()
 
     if not bounty:
         raise HTTPException(status_code=404, detail="Bounty not found")
+    if bounty.creator_id != creator_id:
+        raise HTTPException(status_code=403, detail="Only the bounty creator can resolve it")
     if bounty.status != BountyStatus.OPEN:
         raise HTTPException(status_code=400, detail="Bounty is not open")
 

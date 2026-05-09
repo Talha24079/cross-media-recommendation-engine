@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from typing import List
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import get_db
 from core.security import get_current_user
@@ -69,7 +70,7 @@ async def list_open_bounties(db: AsyncSession = Depends(get_db)):
 
 @router.post("/bounties/{bounty_id}/resolve", response_model=BountyResponse)
 async def resolve_bounty(
-    bounty_id: str,
+    bounty_id: uuid.UUID,
     resolve_data: BountyResolve,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -77,6 +78,7 @@ async def resolve_bounty(
     bounty = await economy_service.resolve_bounty(
         bounty_id=bounty_id,
         winner_id=resolve_data.winner_id,
+        creator_id=current_user.id,
         db=db
     )
     return bounty
