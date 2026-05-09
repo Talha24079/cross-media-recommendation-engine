@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+asyncpg
+motor
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+sentence-transformers
