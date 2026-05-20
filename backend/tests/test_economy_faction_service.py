@@ -73,20 +73,75 @@ async def test_bounty_creation_resolution_and_guards(fake_session):
     assert fake_session.ledger_entries[-1].amount == -25
 
     with pytest.raises(HTTPException, match="Bounty not found"):
-        await economy_service.resolve_bounty(uuid.uuid4(), winner.id, creator.id, fake_session)
+        await economy_service.resolve_bounty(
+            uuid.uuid4(), creator.id, fake_session, winner_id=winner.id
+        )
 
     with pytest.raises(HTTPException, match="Only the bounty creator can resolve it"):
-        await economy_service.resolve_bounty(bounty.id, winner.id, other.id, fake_session)
+        await economy_service.resolve_bounty(
+            bounty.id, other.id, fake_session, winner_id=winner.id
+        )
 
     bounty.status = BountyStatus.COMPLETED
     with pytest.raises(HTTPException, match="Bounty is not open"):
-        await economy_service.resolve_bounty(bounty.id, winner.id, creator.id, fake_session)
+        await economy_service.resolve_bounty(
+            bounty.id, creator.id, fake_session, winner_id=winner.id
+        )
 
     bounty.status = BountyStatus.OPEN
-    resolved = await economy_service.resolve_bounty(bounty.id, winner.id, creator.id, fake_session)
+    resolved = await economy_service.resolve_bounty(
+        bounty.id,
+        creator.id,
+        fake_session,
+        winner_id=winner.id,
+    )
     assert resolved.status == BountyStatus.COMPLETED
     assert winner.reputation_points == 125
     assert fake_session.ledger_entries[-1].amount == 25
+
+
+@pytest.mark.asyncio
+async def test_bounty_submission_cancel_and_resolve_by_submission(fake_session):
+    creator = User(username="poster", email="poster@example.com", hashed_password="hash")
+    helper = User(username="helper", email="helper@example.com", hashed_password="hash")
+    fake_session.seed_user(creator)
+    fake_session.seed_user(helper)
+
+    bounty = await economy_service.create_bounty(
+        creator.id, "Need a manhwa", "Like Greatest Estate Developer", 30, fake_session
+    )
+
+    with pytest.raises(HTTPException, match="Bounty creator cannot submit"):
+        await economy_service.submit_bounty_answer(
+            bounty.id, creator.id, "My own answer", fake_session
+        )
+
+    submission = await economy_service.submit_bounty_answer(
+        bounty.id, helper.id, "Try Omniscient Reader's Viewpoint", fake_session
+    )
+    assert submission.content.startswith("Try Omniscient")
+    assert helper.reputation_points == 101
+
+    archived, refunded = await economy_service.cancel_bounty(bounty.id, creator.id, fake_session)
+    assert archived.status == BountyStatus.ARCHIVED
+    assert refunded == 30
+    assert creator.reputation_points == 100
+
+    bounty.status = BountyStatus.OPEN
+    creator.reputation_points = 70
+    helper.reputation_points = 101
+    fake_session.bounty_submissions.clear()
+    submission = await economy_service.submit_bounty_answer(
+        bounty.id, helper.id, "Second answer", fake_session
+    )
+    resolved = await economy_service.resolve_bounty(
+        bounty.id,
+        creator.id,
+        fake_session,
+        submission_id=submission.id,
+    )
+    assert resolved.status == BountyStatus.COMPLETED
+    assert helper.reputation_points == 132
 
 
 @pytest.mark.asyncio

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 import main
 from core.database import get_db, get_mongodb
-from models.bounty import Bounty, BountyStatus, CentralLedger
+from models.bounty import Bounty, BountyStatus, BountySubmission, CentralLedger
 from models.media import MediaItem
 from models.user import User
 from services import faction_service, recommendation_service
@@ -24,6 +24,8 @@ class FakeResult:
         self._items = list(items)
 
     def scalars(self):
+        if self._items and isinstance(self._items[0], tuple):
+            return FakeResult([item[0] for item in self._items])
         return self
 
     def first(self):
@@ -35,12 +37,20 @@ class FakeResult:
     def scalar_one_or_none(self):
         return self.first()
 
+    def scalar_one(self):
+        if not self._items:
+            raise IndexError("Result has no rows")
+        if len(self._items) > 1:
+            raise ValueError("Result has more than one row")
+        return self._items[0]
+
 
 class FakeAsyncSession:
     def __init__(self):
         self.users: list[User] = []
         self.media_items: list[MediaItem] = []
         self.bounties: list[Bounty] = []
+        self.bounty_submissions: list[BountySubmission] = []
         self.ledger_entries: list[CentralLedger] = []
 
     def seed_user(self, user: User):
@@ -89,6 +99,11 @@ class FakeAsyncSession:
                 obj.created_at = now
             if getattr(obj, "updated_at", None) is None:
                 obj.updated_at = now
+        if isinstance(obj, BountySubmission):
+            if getattr(obj, "created_at", None) is None:
+                obj.created_at = now
+            if getattr(obj, "updated_at", None) is None:
+                obj.updated_at = now
         if isinstance(obj, CentralLedger):
             if getattr(obj, "created_at", None) is None:
                 obj.created_at = now
@@ -101,6 +116,8 @@ class FakeAsyncSession:
             self.media_items.append(obj)
         elif isinstance(obj, Bounty) and obj not in self.bounties:
             self.bounties.append(obj)
+        elif isinstance(obj, BountySubmission) and obj not in self.bounty_submissions:
+            self.bounty_submissions.append(obj)
         elif isinstance(obj, CentralLedger) and obj not in self.ledger_entries:
             self.ledger_entries.append(obj)
 
@@ -129,8 +146,15 @@ class FakeAsyncSession:
         if sql.startswith("SELECT") and "FROM media_items" in sql:
             return FakeResult(self._select_media(sql))
 
-        if sql.startswith("SELECT") and "FROM bounties" in sql:
+        if sql.startswith("SELECT") and "FROM bounties" in sql and "FROM bounty_submissions" not in sql:
+            if "JOIN users" in sql:
+                return FakeResult(self._select_bounties_with_users(sql))
             return FakeResult(self._select_bounties(sql))
+
+        if sql.startswith("SELECT") and "FROM bounty_submissions" in sql:
+            if "JOIN users" in sql:
+                return FakeResult(self._select_submissions_with_users(sql))
+            return FakeResult(self._select_submissions(sql))
 
         if sql.startswith("UPDATE users"):
             self._apply_user_update(sql)
@@ -183,6 +207,38 @@ class FakeAsyncSession:
             wanted = set(in_ids)
             return [item for item in self.media_items if str(item.id) in wanted]
         return list(self.media_items)
+
+    def _select_submissions(self, sql: str):
+        bounty_id = self._match(sql, r"bounty_submissions\.bounty_id\s*=\s*'([^']+)'")
+        submitter_id = self._match(sql, r"bounty_submissions\.submitter_id\s*=\s*'([^']+)'")
+        submission_id = self._match(sql, r"bounty_submissions\.id\s*=\s*'([^']+)'")
+        results = []
+        for submission in self.bounty_submissions:
+            if bounty_id and str(submission.bounty_id) != bounty_id:
+                continue
+            if submitter_id and str(submission.submitter_id) != submitter_id:
+                continue
+            if submission_id and str(submission.id) != submission_id:
+                continue
+            results.append(submission)
+        return results
+
+    def _select_submissions_with_users(self, sql: str):
+        rows = []
+        for submission in self._select_submissions(sql):
+            user = self.get_user(submission.submitter_id)
+            rows.append((submission, user.username if user else "unknown"))
+        return rows
+
+    def _select_bounties_with_users(self, sql: str):
+        rows = []
+        for bounty in self._select_bounties(sql):
+            user = self.get_user(bounty.creator_id)
+            submission_count = len(
+                [s for s in self.bounty_submissions if str(s.bounty_id) == str(bounty.id)]
+            )
+            rows.append((bounty, user.username if user else "unknown", submission_count))
+        return rows
 
     def _select_bounties(self, sql: str):
         bounty_id = self._match(sql, r"bounties\.id\s*=\s*'([^']+)'")
@@ -324,6 +380,18 @@ class FakeCollection:
         self.documents.append(stored_document)
         return FakeInsertOneResult(stored_document["_id"])
 
+    async def find_one(self, filter=None):
+        filter = filter or {}
+        for document in self.documents:
+            matches = True
+            for key, value in filter.items():
+                if document.get(key) != value:
+                    matches = False
+                    break
+            if matches:
+                return copy.deepcopy(document)
+        return None
+
     def find(self, filter=None):
         filter = filter or {}
         results = []
@@ -343,9 +411,12 @@ class FakeMongoDB:
         self._collections = {
             "forum_threads": FakeCollection(),
             "comments": FakeCollection(),
+            "user_preferences": FakeCollection(),
         }
 
     def get_collection(self, name):
+        if name not in self._collections:
+            self._collections[name] = FakeCollection()
         return self._collections[name]
 
 

@@ -103,11 +103,11 @@ def test_recommendation_and_points_flow(api, monkeypatch):
         {"id": "other", "title": "Other", "media_type": "movie"},
     ]
 
-    search = client.get("/recommendation/search?query=epic%20space%20adventure&top_k=1")
+    search = client.get("/recommend?query=epic%20space%20adventure&top_k=1")
     assert search.status_code == 200
     assert search.json()[0]["title"] == "Dune"
 
-    too_many = client.get("/recommendation/search?query=epic%20space%20adventure&top_k=100")
+    too_many = client.get("/recommend?query=epic%20space%20adventure&top_k=100")
     assert too_many.status_code == 422
 
     profile = client.get("/auth/me", headers=_headers(token))

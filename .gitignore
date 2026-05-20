@@ -121,6 +121,12 @@ pgdata/
 mongo_data/
 
 # ========================
+# Local dev runtime (start/stop scripts)
+# ========================
+.runtime/
+
+# ========================
 # Custom / Project Files
 # ========================
 PROJECT_GUIDE.md
+skills-lock.json

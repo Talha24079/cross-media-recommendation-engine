@@ -19,6 +19,8 @@ class ThreadResponse(MongoBaseModel):
     title: str
     content: str
     author_id: str
+    author_username: Optional[str] = None
+    author_avatar_url: Optional[str] = None
     media_id: Optional[str] = None
     tags: List[str] = []
     created_at: datetime
@@ -32,6 +34,8 @@ class CommentResponse(MongoBaseModel):
     thread_id: str
     parent_id: Optional[str] = None
     author_id: str
+    author_username: Optional[str] = None
+    author_avatar_url: Optional[str] = None
     content: str
     created_at: datetime
     updated_at: datetime
