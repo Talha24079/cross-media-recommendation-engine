@@ -31,6 +31,7 @@ jobs:
           source antenv/bin/activate
           pip install --upgrade pip
           pip install -r backend/requirements.txt
+          pip install -r requirements.txt
 
       # 📦 CRUCIAL CHANGE: We are now INCLUDING the antenv folder in the artifact.
       # This guarantees that uvicorn, gunicorn, and psycopg2 travel directly to Azure.
